@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forza-automation-app"
+version = "0.1.0"
+description = "GUI macro runner for Forza using ViGEm (vgamepad)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Ng Kai Chong" }]
+dependencies = [
+  "pyautogui>=0.9.53",
+  "keyboard>=0.13.5",
+]
+
+# creates a console command after install: `forza-automation`
+[project.scripts]
+forza-automation = "app:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+# packages that live under src/
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["controller", "ui"]
