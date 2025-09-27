@@ -3,8 +3,7 @@
 
 
 
-## KB/M Macro Automation App
-
+## Forza glitch automator
 Desktop GUI to build and loop keyboard/mouse macros (press → wait → press…) for automating forza glitches. The goal is to navigate to the selected race and start + complete the race for you automatically in a loop.
 
 It sends keyboard and mouse inputs you define in the UI, using Python libraries (`pyautogui`, `keyboard`).
