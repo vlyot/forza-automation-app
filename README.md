@@ -3,7 +3,7 @@
 
 
 
-## Forza glitch automator
+## Forza glitch automator (WIP - INCOMPLETE)
 Desktop GUI to build and loop keyboard/mouse macros (press → wait → press…) for automating forza glitches. The goal is to navigate to the selected race and start + complete the race for you automatically in a loop.
 
 It sends keyboard and mouse inputs you define in the UI, using Python libraries (`pyautogui`, `keyboard`).
@@ -51,21 +51,6 @@ The GUI will appear. Keep your target app or game focused to receive inputs.
 * Uses `pyautogui` and `keyboard` to send real keyboard/mouse input to Windows
 
 ---
-
-
-## Quick Start (Develop & Test Without Packaging)
- **Run the app (no packaging)**
-
- 1. Open the project in vsc and open terminal under \forza-automation-app
-
-  ```powershell
-  python src/app.py
-  ```
-
-  The GUI should appear. Keep your target app or game focused to receive inputs.
-
-
---
 
 ## Button Mapping (DualSense → XInput) (discontinued but here for any reference)
 
