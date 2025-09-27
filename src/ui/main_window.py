@@ -32,9 +32,15 @@ class MacroRunner(threading.Thread):
                 if self.stop_event.is_set():
                     break
                 if action['type'] == 'key':
-                    keyboard.press_and_release(action['value'])
+                    key = action.get('value', '')
+                    if key:
+                        keyboard.press_and_release(key)
+                        time.sleep(0.3)
                 elif action['type'] == 'mouse':
-                    pyautogui.click(button=action['value'])
+                    btn = action.get('value', '')
+                    if btn:
+                        pyautogui.click(button=btn)
+                        time.sleep(0.3)
                 elif action['type'] == 'wait':
                     time.sleep(action['value'])
             self.update_runtime(time.time() - start_time)
@@ -113,6 +119,9 @@ class MainWindow(QMainWindow):
         self.runtime_label = QLabel("Loop Runtime: 0.00s")
         layout.addWidget(self.runtime_label)
 
+        self.countdown_label = QLabel("")
+        layout.addWidget(self.countdown_label)
+
         central.setLayout(layout)
         self.setCentralWidget(central)
 
@@ -123,8 +132,10 @@ class MainWindow(QMainWindow):
         type_combo.addItems(["key", "mouse", "wait"])
         self.table.setCellWidget(row, 0, type_combo)
 
-        key_options = ["up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"]
-        key_options += [chr(i) for i in range(65, 91)]  # A-Z
+        key_options = [
+            "up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"
+        ]
+        key_options += [chr(i) for i in range(97, 123)]  # a-z
         key_options += [str(i) for i in range(0, 10)]   # 0-9
         mouse_options = ["left", "right", "middle"]
 
@@ -159,8 +170,8 @@ class MainWindow(QMainWindow):
         for row in range(self.table.rowCount()):
             type_widget = self.table.cellWidget(row, 0)
             type_ = type_widget.currentText() if type_widget else "key"
-            value_item = self.table.item(row, 1)
-            value = value_item.text() if value_item else ""
+            value_widget = self.table.cellWidget(row, 1)
+            value = value_widget.currentText() if value_widget and value_widget.isEnabled() else ""
             wait_item = self.table.item(row, 2)
             wait = float(wait_item.text()) if wait_item and wait_item.text() else 0.0
             if type_ == "wait":
@@ -175,16 +186,33 @@ class MainWindow(QMainWindow):
         if self.runner and self.runner.is_alive():
             QMessageBox.warning(self, "Macro Running", "Macro is already running.")
             return
+        # Always use current table actions, not saved/loaded macros
         self.sequence = self.get_sequence()
         if not self.sequence:
             QMessageBox.warning(self, "No Actions", "Add actions to the macro before starting.")
             return
         self.stop_event.clear()
         loop_count = self.loop_spin.value()
-        self.runner = MacroRunner(self.sequence, loop_count, self.stop_event, self.update_runtime)
-        self.runner.start()
+
         self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+
+        self.countdown_label.setText("Switch to your target window! Macro will start in 3 seconds...")
+        QApplication.processEvents()
+
+        def do_countdown():
+            for i in range(3, 0, -1):
+                self.countdown_label.setText(f"Switch to your target window! Macro will start in {i} seconds...")
+                QApplication.processEvents()
+                time.sleep(1)
+            self.countdown_label.setText("")
+            QApplication.processEvents()
+            self.runner = MacroRunner(self.sequence, loop_count, self.stop_event, self.update_runtime)
+            self.runner.start()
+            self.start_btn.setEnabled(False)
+            self.stop_btn.setEnabled(True)
+
+        threading.Thread(target=do_countdown, daemon=True).start()
 
     def stop_macro(self):
         self.stop_event.set()
@@ -203,13 +231,19 @@ class MainWindow(QMainWindow):
         if len(macro_files) >= MAX_MACROS and name + '.json' not in macro_files:
             QMessageBox.warning(self, "Limit Reached", f"Maximum {MAX_MACROS} macros allowed.")
             return
-        sequence = self.get_sequence()
-        if not sequence:
-            QMessageBox.warning(self, "No Actions", "Add actions before saving.")
-            return
+        # Save table format: type, value (selected), wait
+        actions = []
+        for row in range(self.table.rowCount()):
+            type_widget = self.table.cellWidget(row, 0)
+            type_ = type_widget.currentText() if type_widget else "key"
+            value_widget = self.table.cellWidget(row, 1)
+            value = value_widget.currentText() if value_widget and value_widget.isEnabled() else ""
+            wait_item = self.table.item(row, 2)
+            wait = float(wait_item.text()) if wait_item and wait_item.text() else 0.0
+            actions.append({"type": type_, "value": value, "wait": wait})
         path = os.path.join(MACROS_DIR, name + '.json')
         with open(path, 'w') as f:
-            json.dump(sequence, f, indent=2)
+            json.dump(actions, f, indent=2)
         self.refresh_macro_list()
         QMessageBox.information(self, "Saved", f"Macro '{name}' saved.")
 
@@ -229,21 +263,36 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Not Found", f"Macro '{name}' not found.")
             return
         with open(path, 'r') as f:
-            sequence = json.load(f)
+            actions = json.load(f)
         self.table.setRowCount(0)
-        for action in sequence:
+        key_options = [
+            "up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"
+        ]
+        key_options += [chr(i) for i in range(97, 123)]  # a-z
+        key_options += [str(i) for i in range(0, 10)]   # 0-9
+        mouse_options = ["left", "right", "middle"]
+        for action in actions:
             row = self.table.rowCount()
             self.table.insertRow(row)
             type_combo = QComboBox()
             type_combo.addItems(["key", "mouse", "wait"])
             type_combo.setCurrentText(action['type'])
             self.table.setCellWidget(row, 0, type_combo)
-            if action['type'] == 'wait':
-                self.table.setItem(row, 1, QTableWidgetItem(""))
-                self.table.setItem(row, 2, QTableWidgetItem(str(action['value'])))
+            value_combo = QComboBox()
+            value_combo.setEditable(False)
+            if action['type'] == 'key':
+                value_combo.addItems(key_options)
+                value_combo.setCurrentText(action['value'])
+                value_combo.setEnabled(True)
+            elif action['type'] == 'mouse':
+                value_combo.addItems(mouse_options)
+                value_combo.setCurrentText(action['value'])
+                value_combo.setEnabled(True)
             else:
-                self.table.setItem(row, 1, QTableWidgetItem(action['value']))
-                self.table.setItem(row, 2, QTableWidgetItem("0"))
+                value_combo.setEnabled(False)
+            self.table.setCellWidget(row, 1, value_combo)
+            wait_item = QTableWidgetItem(str(action.get('wait', 0)))
+            self.table.setItem(row, 2, wait_item)
 
     def toggle_hotkey(self):
         if self.hotkey_toggle_btn.isChecked():
