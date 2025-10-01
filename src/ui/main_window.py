@@ -5,7 +5,8 @@ import time
 import threading
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QLineEdit, QLabel, QMessageBox, QComboBox, QSpinBox
+    QTableWidget, QTableWidgetItem, QLineEdit, QLabel, QMessageBox, QComboBox, QSpinBox,
+    QTabWidget
 )
 from PySide6.QtCore import Qt
 import pyautogui
@@ -25,24 +26,39 @@ class MacroRunner(threading.Thread):
 
     def run(self):
         start_time = time.time()
-        for i in range(self.loop_count):
+        loop_counter = 0
+        
+        # Handle infinite loops vs fixed count
+        while True:
             if self.stop_event.is_set():
                 break
+                
+            # Check if we've reached the fixed loop count (if not infinite)
+            if self.loop_count != float('inf') and loop_counter >= self.loop_count:
+                break
+                
             for action in self.sequence:
                 if self.stop_event.is_set():
                     break
+                    
                 if action['type'] == 'key':
                     key = action.get('value', '')
+                    hold_duration = action.get('hold', 0.1)
                     if key:
-                        keyboard.press_and_release(key)
-                        time.sleep(0.3)
+                        keyboard.press(key)
+                        time.sleep(hold_duration)
+                        keyboard.release(key)
                 elif action['type'] == 'mouse':
                     btn = action.get('value', '')
+                    hold_duration = action.get('hold', 0.1)
                     if btn:
-                        pyautogui.click(button=btn)
-                        time.sleep(0.3)
+                        pyautogui.mouseDown(button=btn)
+                        time.sleep(hold_duration)
+                        pyautogui.mouseUp(button=btn)
                 elif action['type'] == 'wait':
                     time.sleep(action['value'])
+                    
+            loop_counter += 1
             self.update_runtime(time.time() - start_time)
 
 class MainWindow(QMainWindow):
@@ -54,10 +70,20 @@ class MainWindow(QMainWindow):
         self.stop_event = threading.Event()
         self.global_hotkey_enabled = False
         self.hotkey = 'ctrl+alt+m'
+        
+        # Define options once to avoid duplication
+        self.key_options = [
+            "up", "down", "left", "right", "enter", "space", "tab", "esc", 
+            "backspace", "delete", "home", "end", "pageup", "pagedown"
+        ]
+        self.key_options += [chr(i) for i in range(97, 123)]  # a-z
+        self.key_options += [str(i) for i in range(0, 10)]   # 0-9
+        self.mouse_options = ["left", "right", "middle"]
+        
         self.init_ui()
 
     def init_ui(self):
-        scale = 1.35
+        scale = 1.62  # Increased by 1.2x (was 1.35)
         from PySide6.QtGui import QFont
         font = self.font()
         preferred_fonts = ["SF Pro Display", "San Francisco", "Segoe UI", "Arial"]
@@ -67,309 +93,340 @@ class MainWindow(QMainWindow):
             if test_font.family() == fam:
                 break
         font.setPointSizeF(font.pointSizeF() * scale)
-        self.setFont(font)
-        self.resize(int(800 * scale), int(600 * scale))
 
-    from PySide6.QtWidgets import QTabWidget
-    central = QWidget()
-    main_layout = QVBoxLayout()
-    self._main_layout = main_layout
-    self._padding_percent = 0.03
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
 
-    # --- Macro Tab ---
-    macro_tab = QWidget()
-    macro_layout = QVBoxLayout()
+        # Create macro tab
+        self.create_macro_tab(font)
+        
+        # Create config tab
+        self.create_config_tab(font)
 
-    self.table = QTableWidget(0, 3)
-    self.table.setHorizontalHeaderLabels(["Type", "Value", "Wait (s)"])
-    self.table.setFont(font)
-    macro_layout.addWidget(self.table)
+    def create_macro_tab(self, font):
+        """Create the main macro editing and execution tab."""
+        macro_widget = QWidget()
+        layout = QVBoxLayout()
+        macro_widget.setLayout(layout)
 
-    add_row_btn = QPushButton("Add Action")
-    add_row_btn.setFont(font)
-    add_row_btn.clicked.connect(self.add_action_row)
-    macro_layout.addWidget(add_row_btn)
+        # Macro table setup
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Type", "Value", "Hold (s)", "Wait (s)"])
+        self.table.setFont(font)
+        layout.addWidget(self.table)
 
-    duplicate_row_btn = QPushButton("Duplicate Action")
-    duplicate_row_btn.setFont(font)
-    duplicate_row_btn.clicked.connect(self.duplicate_action_row)
-    macro_layout.addWidget(duplicate_row_btn)
+        # Table controls
+        table_controls = QHBoxLayout()
+        add_btn = QPushButton("Add Action")
+        add_btn.setFont(font)
+        add_btn.clicked.connect(self.add_action_row)
+        table_controls.addWidget(add_btn)
 
-    controls = QHBoxLayout()
-    self.loop_spin = QSpinBox()
-    self.loop_spin.setMinimum(1)
-    self.loop_spin.setMaximum(999)
-    self.loop_spin.setValue(1)
-    self.loop_spin.setFont(font)
-    controls.addWidget(QLabel("Loops:", font=font))
-    controls.addWidget(self.loop_spin)
+        duplicate_btn = QPushButton("Duplicate Action")
+        duplicate_btn.setFont(font)
+        duplicate_btn.clicked.connect(self.duplicate_action_row)
+        table_controls.addWidget(duplicate_btn)
 
-    self.start_btn = QPushButton("Start Macro")
-    self.start_btn.setFont(font)
-    self.start_btn.clicked.connect(self.start_macro)
-    controls.addWidget(self.start_btn)
+        remove_btn = QPushButton("Remove Selected")
+        remove_btn.setFont(font)
+        remove_btn.clicked.connect(self.remove_selected_row)
+        table_controls.addWidget(remove_btn)
+        
+        layout.addLayout(table_controls)
 
-    self.stop_btn = QPushButton("Stop Macro")
-    self.stop_btn.setFont(font)
-    self.stop_btn.clicked.connect(self.stop_macro)
-    self.stop_btn.setEnabled(False)
-    controls.addWidget(self.stop_btn)
-
-    macro_layout.addLayout(controls)
-
-    self.runtime_label = QLabel("Loop Runtime: 0.00s")
-    self.runtime_label.setFont(font)
-    macro_layout.addWidget(self.runtime_label)
-
-    self.countdown_label = QLabel("")
-    self.countdown_label.setFont(font)
-    macro_layout.addWidget(self.countdown_label)
-
-    macro_tab.setLayout(macro_layout)
-
-    # --- Config Tab ---
-    config_tab = QWidget()
-    config_layout = QVBoxLayout()
-
-    macro_controls = QHBoxLayout()
-    self.macro_name_edit = QLineEdit()
-    self.macro_name_edit.setPlaceholderText("Macro name")
-    self.macro_name_edit.setFont(font)
-    macro_controls.addWidget(self.macro_name_edit)
-
-    self.save_btn = QPushButton("Save Macro")
-    self.save_btn.setFont(font)
-    self.save_btn.clicked.connect(self.save_macro)
-    macro_controls.addWidget(self.save_btn)
-
-    self.load_combo = QComboBox()
-    self.load_combo.setFont(font)
-    self.refresh_macro_list()
-    macro_controls.addWidget(self.load_combo)
-
-    self.load_btn = QPushButton("Load Macro")
-    self.load_btn.setFont(font)
-    self.load_btn.clicked.connect(self.load_macro)
-    macro_controls.addWidget(self.load_btn)
-
-    config_layout.addLayout(macro_controls)
-
-    hotkey_controls = QHBoxLayout()
-    self.hotkey_edit = QLineEdit(self.hotkey)
-    self.hotkey_edit.setFont(font)
-    hotkey_controls.addWidget(QLabel("Global Hotkey:", font=font))
-    hotkey_controls.addWidget(self.hotkey_edit)
-    self.hotkey_toggle_btn = QPushButton("Enable Hotkey")
-    self.hotkey_toggle_btn.setFont(font)
-    self.hotkey_toggle_btn.setCheckable(True)
-    self.hotkey_toggle_btn.clicked.connect(self.toggle_hotkey)
-    hotkey_controls.addWidget(self.hotkey_toggle_btn)
-    config_layout.addLayout(hotkey_controls)
-
-    config_tab.setLayout(config_layout)
-
-    # --- Tabs Widget ---
-    tabs = QTabWidget()
-    tabs.addTab(macro_tab, "Macro")
-    tabs.addTab(config_tab, "Config")
-    main_layout.addWidget(tabs)
-
-    central.setLayout(main_layout)
-    self.setCentralWidget(central)
-    self._container = central
-    self._update_padding()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._update_padding()
-
-    def _update_padding(self):
-        # Add 3% padding around the main layout
-        if hasattr(self, '_container') and hasattr(self, '_main_layout'):
-            w = self._container.width()
-            h = self._container.height()
-            pad_w = int(w * self._padding_percent)
-            pad_h = int(h * self._padding_percent)
-            self._main_layout.setContentsMargins(pad_w, pad_h, pad_w, pad_h)
-
-    def duplicate_action_row(self):
-        row = self.table.currentRow()
-        if row < 0:
-            return
-        type_widget = self.table.cellWidget(row, 0)
-        value_widget = self.table.cellWidget(row, 1)
-        wait_item = self.table.item(row, 2)
-        if not (type_widget and value_widget and wait_item):
-            return
-        type_ = type_widget.currentText()
-        value = value_widget.currentText() if value_widget.isEnabled() else ""
-        wait = wait_item.text() if wait_item else "0"
-        # Insert new row below
-        insert_row = row + 1
-        self.table.insertRow(insert_row)
-        new_type_combo = QComboBox()
-        new_type_combo.addItems(["key", "mouse", "wait"])
-        new_type_combo.setCurrentText(type_)
-        self.table.setCellWidget(insert_row, 0, new_type_combo)
-        key_options = [
-            "up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"
-        ]
-        key_options += [chr(i) for i in range(97, 123)]  # a-z
-        key_options += [str(i) for i in range(0, 10)]   # 0-9
-        mouse_options = ["left", "right", "middle"]
-        new_value_combo = QComboBox()
-        new_value_combo.setEditable(False)
-        if type_ == "key":
-            new_value_combo.addItems(key_options)
-            new_value_combo.setCurrentText(value)
-            new_value_combo.setEnabled(True)
-        elif type_ == "mouse":
-            new_value_combo.addItems(mouse_options)
-            new_value_combo.setCurrentText(value)
-            new_value_combo.setEnabled(True)
-        else:
-            new_value_combo.setEnabled(False)
-        self.table.setCellWidget(insert_row, 1, new_value_combo)
-        new_wait_item = QTableWidgetItem(str(wait))
-        self.table.setItem(insert_row, 2, new_wait_item)
-        self.table.setCurrentCell(insert_row, 0)
-
-        controls = QHBoxLayout()
-        self.loop_spin = QSpinBox()
-        self.loop_spin.setMinimum(1)
-        self.loop_spin.setMaximum(999)
-        self.loop_spin.setValue(1)
-        self.loop_spin.setFont(font)
-        controls.addWidget(QLabel("Loops:", font=font))
-        controls.addWidget(self.loop_spin)
-
+        # Macro controls
+        macro_controls = QHBoxLayout()
+        
         self.start_btn = QPushButton("Start Macro")
         self.start_btn.setFont(font)
         self.start_btn.clicked.connect(self.start_macro)
-        controls.addWidget(self.start_btn)
+        macro_controls.addWidget(self.start_btn)
 
         self.stop_btn = QPushButton("Stop Macro")
         self.stop_btn.setFont(font)
-        self.stop_btn.clicked.connect(self.stop_macro)
         self.stop_btn.setEnabled(False)
-        controls.addWidget(self.stop_btn)
+        self.stop_btn.clicked.connect(self.stop_macro)
+        macro_controls.addWidget(self.stop_btn)
 
-        layout.addLayout(controls)
-
-        macro_controls = QHBoxLayout()
-        self.macro_name_edit = QLineEdit()
-        self.macro_name_edit.setPlaceholderText("Macro name")
-        self.macro_name_edit.setFont(font)
-        macro_controls.addWidget(self.macro_name_edit)
-
-        self.save_btn = QPushButton("Save Macro")
-        self.save_btn.setFont(font)
-        self.save_btn.clicked.connect(self.save_macro)
-        macro_controls.addWidget(self.save_btn)
-
-        self.load_combo = QComboBox()
-        self.load_combo.setFont(font)
-        self.refresh_macro_list()
-        macro_controls.addWidget(self.load_combo)
-
-        self.load_btn = QPushButton("Load Macro")
-        self.load_btn.setFont(font)
-        self.load_btn.clicked.connect(self.load_macro)
-        macro_controls.addWidget(self.load_btn)
+        # Loop controls with radio buttons
+        from PySide6.QtWidgets import QRadioButton, QButtonGroup
+        loop_controls = QVBoxLayout()
+        
+        self.loop_group = QButtonGroup()
+        self.loop_until_stop = QRadioButton("Loop until stop")
+        self.loop_until_stop.setFont(font)
+        self.loop_until_stop.setChecked(True)  # Default option
+        self.loop_group.addButton(self.loop_until_stop)
+        loop_controls.addWidget(self.loop_until_stop)
+        
+        fixed_loop_layout = QHBoxLayout()
+        self.loop_fixed_count = QRadioButton("Fixed loops:")
+        self.loop_fixed_count.setFont(font)
+        self.loop_group.addButton(self.loop_fixed_count)
+        fixed_loop_layout.addWidget(self.loop_fixed_count)
+        
+        self.loop_spin = QSpinBox()
+        self.loop_spin.setMinimum(1)
+        self.loop_spin.setMaximum(1000)
+        self.loop_spin.setValue(1)
+        self.loop_spin.setFont(font)
+        self.loop_spin.setEnabled(False)
+        fixed_loop_layout.addWidget(self.loop_spin)
+        
+        # Connect radio button to enable/disable spin box
+        self.loop_fixed_count.toggled.connect(self.loop_spin.setEnabled)
+        
+        loop_controls.addLayout(fixed_loop_layout)
+        macro_controls.addLayout(loop_controls)
 
         layout.addLayout(macro_controls)
 
+        # Status labels
+        self.runtime_label = QLabel("Runtime: 0.0s")
+        self.runtime_label.setFont(font)
+        layout.addWidget(self.runtime_label)
+        
+        self.countdown_label = QLabel("")
+        self.countdown_label.setFont(font)
+        layout.addWidget(self.countdown_label)
+
+        self.tab_widget.addTab(macro_widget, "Macro")
+
+    def create_config_tab(self, font):
+        """Create the configuration tab with save/load and hotkey settings."""
+        config_widget = QWidget()
+        layout = QVBoxLayout()
+        config_widget.setLayout(layout)
+
+        # Save/Load controls
+        save_load_group = QVBoxLayout()
+        save_load_group.addWidget(QLabel("Macro Management", font=font))
+        
+        save_load_controls = QHBoxLayout()
+        save_load_controls.addWidget(QLabel("Name:", font=font))
+        self.macro_name_edit = QLineEdit()
+        self.macro_name_edit.setFont(font)
+        save_load_controls.addWidget(self.macro_name_edit)
+
+        save_btn = QPushButton("Save Macro")
+        save_btn.setFont(font)
+        save_btn.clicked.connect(self.save_macro)
+        save_load_controls.addWidget(save_btn)
+
+        save_load_group.addLayout(save_load_controls)
+
+        # Load controls
+        load_controls = QHBoxLayout()
+        load_controls.addWidget(QLabel("Load:", font=font))
+        self.load_combo = QComboBox()
+        self.load_combo.setFont(font)
+        load_controls.addWidget(self.load_combo)
+
+        load_btn = QPushButton("Load Macro")
+        load_btn.setFont(font)
+        load_btn.clicked.connect(self.load_macro)
+        load_controls.addWidget(load_btn)
+
+        save_load_group.addLayout(load_controls)
+        layout.addLayout(save_load_group)
+
+        # Add separator
+        layout.addWidget(QLabel(""))
+
+        # Hotkey controls
+        hotkey_group = QVBoxLayout()
+        hotkey_group.addWidget(QLabel("Global Hotkey Settings", font=font))
+        
         hotkey_controls = QHBoxLayout()
-        self.hotkey_edit = QLineEdit(self.hotkey)
+        hotkey_controls.addWidget(QLabel("Hotkey:", font=font))
+        
+        self.hotkey_edit = QLineEdit("ctrl+alt+m")
         self.hotkey_edit.setFont(font)
-        hotkey_controls.addWidget(QLabel("Global Hotkey:", font=font))
         hotkey_controls.addWidget(self.hotkey_edit)
+        
         self.hotkey_toggle_btn = QPushButton("Enable Hotkey")
         self.hotkey_toggle_btn.setFont(font)
         self.hotkey_toggle_btn.setCheckable(True)
         self.hotkey_toggle_btn.clicked.connect(self.toggle_hotkey)
         hotkey_controls.addWidget(self.hotkey_toggle_btn)
-        layout.addLayout(hotkey_controls)
 
-        self.runtime_label = QLabel("Loop Runtime: 0.00s")
-        self.runtime_label.setFont(font)
-        layout.addWidget(self.runtime_label)
+        hotkey_group.addLayout(hotkey_controls)
+        
+        # Add hotkey help text
+        help_label = QLabel("Use this hotkey to start/stop macros from anywhere.")
+        help_label.setFont(font)
+        help_label.setStyleSheet("color: gray;")
+        hotkey_group.addWidget(help_label)
+        
+        layout.addLayout(hotkey_group)
 
-        self.countdown_label = QLabel("")
-        self.countdown_label.setFont(font)
-        layout.addWidget(self.countdown_label)
+        # Add stretch to push everything to the top
+        layout.addStretch()
 
-        central.setLayout(layout)
-        self.setCentralWidget(central)
+        self.tab_widget.addTab(config_widget, "Config")
+        
+        # Initialize macro list
+        self.refresh_macro_list()
+
+
 
     def add_action_row(self):
         row = self.table.rowCount()
         self.table.insertRow(row)
+        
+        # Type combo box
         type_combo = QComboBox()
         type_combo.addItems(["key", "mouse", "wait"])
+        type_combo.currentTextChanged.connect(lambda: self.update_value_combo(row))
         self.table.setCellWidget(row, 0, type_combo)
 
-        key_options = [
-            "up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"
-        ]
-        key_options += [chr(i) for i in range(97, 123)]  # a-z
-        key_options += [str(i) for i in range(0, 10)]   # 0-9
-        mouse_options = ["left", "right", "middle"]
-
+        # Value combo box
         value_combo = QComboBox()
         value_combo.setEditable(False)
         self.table.setCellWidget(row, 1, value_combo)
 
-        wait_item = QTableWidgetItem("0")
-        self.table.setItem(row, 2, wait_item)
+        # Hold time (for key/mouse actions)
+        hold_item = QTableWidgetItem("0.1")
+        self.table.setItem(row, 2, hold_item)
+        
+        # Wait time
+        wait_item = QTableWidgetItem("0.1")
+        self.table.setItem(row, 3, wait_item)
+        
+        # Update value combo options based on initial type
+        self.update_value_combo(row)
 
-        def update_row_fields():
-            type_ = type_combo.currentText()
-            if type_ == "wait":
-                value_combo.clear()
-                value_combo.setEnabled(False)
-                wait_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-            elif type_ == "key":
-                value_combo.clear()
-                value_combo.addItems(key_options)
-                value_combo.setEnabled(True)
-                wait_item.setFlags(Qt.ItemIsEnabled)  # Disable editing
-            elif type_ == "mouse":
-                value_combo.clear()
-                value_combo.addItems(mouse_options)
-                value_combo.setEnabled(True)
-                wait_item.setFlags(Qt.ItemIsEnabled)  # Disable editing
-        type_combo.currentIndexChanged.connect(update_row_fields)
-        update_row_fields()
+    def duplicate_action_row(self):
+        """Duplicate the currently selected action row."""
+        current_row = self.table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select an action to duplicate.")
+            return
+            
+        # Get data from selected row
+        type_widget = self.table.cellWidget(current_row, 0)
+        value_widget = self.table.cellWidget(current_row, 1)
+        hold_item = self.table.item(current_row, 2)
+        wait_item = self.table.item(current_row, 3)
+        
+        if not type_widget:
+            return
+            
+        # Create new row
+        new_row = current_row + 1
+        self.table.insertRow(new_row)
+        
+        # Duplicate type combo
+        new_type_combo = QComboBox()
+        new_type_combo.addItems(["key", "mouse", "wait"])
+        new_type_combo.setCurrentText(type_widget.currentText())
+        new_type_combo.currentTextChanged.connect(lambda: self.update_value_combo(new_row))
+        self.table.setCellWidget(new_row, 0, new_type_combo)
+        
+        # Duplicate value combo
+        new_value_combo = QComboBox()
+        new_value_combo.setEditable(False)
+        self.table.setCellWidget(new_row, 1, new_value_combo)
+        
+        # Update value combo options and set current value
+        self.update_value_combo(new_row)
+        if value_widget and value_widget.isEnabled():
+            new_value_combo.setCurrentText(value_widget.currentText())
+        
+        # Duplicate hold and wait times
+        new_hold_item = QTableWidgetItem(hold_item.text() if hold_item else "0.1")
+        self.table.setItem(new_row, 2, new_hold_item)
+        
+        new_wait_item = QTableWidgetItem(wait_item.text() if wait_item else "0.1")
+        self.table.setItem(new_row, 3, new_wait_item)
+        
+        # Select the new row
+        self.table.selectRow(new_row)
+
+    def remove_selected_row(self):
+        current_row = self.table.currentRow()
+        if current_row >= 0:
+            self.table.removeRow(current_row)
+
+    def update_value_combo(self, row):
+        """Update the value combo box options based on the selected type."""
+        type_widget = self.table.cellWidget(row, 0)
+        value_widget = self.table.cellWidget(row, 1)
+        hold_item = self.table.item(row, 2)
+        wait_item = self.table.item(row, 3)
+
+        if not type_widget or not value_widget or not hold_item or not wait_item:
+            return
+
+        action_type = type_widget.currentText()
+        value_widget.clear()
+
+        # Default: enable everything
+        value_widget.setEnabled(True)
+        hold_item.setFlags(hold_item.flags() | Qt.ItemIsEditable)
+        wait_item.setFlags(wait_item.flags() | Qt.ItemIsEditable)
+
+        if action_type == "key" or action_type == "mouse":
+            # Enable value and hold, disable wait
+            if action_type == "key":
+                value_widget.addItems(self.key_options)
+            else:
+                value_widget.addItems(self.mouse_options)
+            value_widget.setEnabled(True)
+            hold_item.setFlags(hold_item.flags() | Qt.ItemIsEditable)
+            wait_item.setFlags(wait_item.flags() & ~Qt.ItemIsEditable)
+        elif action_type == "wait":
+            # Enable wait, disable value and hold
+            value_widget.setEnabled(False)
+            hold_item.setFlags(hold_item.flags() & ~Qt.ItemIsEditable)
+            wait_item.setFlags(wait_item.flags() | Qt.ItemIsEditable)
+
+        # Update the table to reflect changes
+        self.table.setItem(row, 2, hold_item)
+        self.table.setItem(row, 3, wait_item)
 
     def get_sequence(self):
         sequence = []
         for row in range(self.table.rowCount()):
             type_widget = self.table.cellWidget(row, 0)
             type_ = type_widget.currentText() if type_widget else "key"
+            
             value_widget = self.table.cellWidget(row, 1)
             value = value_widget.currentText() if value_widget and value_widget.isEnabled() else ""
-            wait_item = self.table.item(row, 2)
-            wait = float(wait_item.text()) if wait_item and wait_item.text() else 0.0
+            
+            hold_item = self.table.item(row, 2)
+            hold = float(hold_item.text()) if hold_item and hold_item.text() else 0.1
+            
+            wait_item = self.table.item(row, 3)
+            wait = float(wait_item.text()) if wait_item and wait_item.text() else 0.1
+            
             if type_ == "wait":
+                # For wait actions, use the wait value as the delay time
                 sequence.append({"type": "wait", "value": wait})
             else:
-                sequence.append({"type": type_, "value": value})
+                # For key/mouse actions, include hold duration
+                sequence.append({"type": type_, "value": value, "hold": hold})
                 if wait > 0:
                     sequence.append({"type": "wait", "value": wait})
+        
         return sequence
 
     def start_macro(self):
-        if self.runner and self.runner.is_alive():
-            QMessageBox.warning(self, "Macro Running", "Macro is already running.")
-            return
         # Always use current table actions, not saved/loaded macros
         self.sequence = self.get_sequence()
         if not self.sequence:
             QMessageBox.warning(self, "No Actions", "Add actions to the macro before starting.")
             return
+        
         self.stop_event.clear()
-        loop_count = self.loop_spin.value()
+        
+        # Determine loop count based on radio button selection
+        if self.loop_until_stop.isChecked():
+            loop_count = float('inf')  # Infinite loops until stopped
+        else:
+            loop_count = self.loop_spin.value()
 
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(False)
@@ -408,16 +465,18 @@ class MainWindow(QMainWindow):
         if len(macro_files) >= MAX_MACROS and name + '.json' not in macro_files:
             QMessageBox.warning(self, "Limit Reached", f"Maximum {MAX_MACROS} macros allowed.")
             return
-        # Save table format: type, value (selected), wait
+        # Save table format: type, value, hold, wait
         actions = []
         for row in range(self.table.rowCount()):
             type_widget = self.table.cellWidget(row, 0)
             type_ = type_widget.currentText() if type_widget else "key"
             value_widget = self.table.cellWidget(row, 1)
             value = value_widget.currentText() if value_widget and value_widget.isEnabled() else ""
-            wait_item = self.table.item(row, 2)
-            wait = float(wait_item.text()) if wait_item and wait_item.text() else 0.0
-            actions.append({"type": type_, "value": value, "wait": wait})
+            hold_item = self.table.item(row, 2)
+            hold = float(hold_item.text()) if hold_item and hold_item.text() else 0.1
+            wait_item = self.table.item(row, 3)
+            wait = float(wait_item.text()) if wait_item and wait_item.text() else 0.1
+            actions.append({"type": type_, "value": value, "hold": hold, "wait": wait})
         path = os.path.join(MACROS_DIR, name + '.json')
         with open(path, 'w') as f:
             json.dump(actions, f, indent=2)
@@ -442,34 +501,35 @@ class MainWindow(QMainWindow):
         with open(path, 'r') as f:
             actions = json.load(f)
         self.table.setRowCount(0)
-        key_options = [
-            "up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"
-        ]
-        key_options += [chr(i) for i in range(97, 123)]  # a-z
-        key_options += [str(i) for i in range(0, 10)]   # 0-9
-        mouse_options = ["left", "right", "middle"]
         for action in actions:
             row = self.table.rowCount()
             self.table.insertRow(row)
             type_combo = QComboBox()
             type_combo.addItems(["key", "mouse", "wait"])
             type_combo.setCurrentText(action['type'])
+            type_combo.currentTextChanged.connect(lambda: self.update_value_combo(row))
             self.table.setCellWidget(row, 0, type_combo)
             value_combo = QComboBox()
             value_combo.setEditable(False)
             if action['type'] == 'key':
-                value_combo.addItems(key_options)
+                value_combo.addItems(self.key_options)
                 value_combo.setCurrentText(action['value'])
                 value_combo.setEnabled(True)
             elif action['type'] == 'mouse':
-                value_combo.addItems(mouse_options)
+                value_combo.addItems(self.mouse_options)
                 value_combo.setCurrentText(action['value'])
                 value_combo.setEnabled(True)
             else:
                 value_combo.setEnabled(False)
             self.table.setCellWidget(row, 1, value_combo)
-            wait_item = QTableWidgetItem(str(action.get('wait', 0)))
-            self.table.setItem(row, 2, wait_item)
+            
+            # Handle hold column (backward compatibility for old saves)
+            hold_item = QTableWidgetItem(str(action.get('hold', 0.1)))
+            self.table.setItem(row, 2, hold_item)
+            
+            # Handle wait column (backward compatibility for old saves)
+            wait_item = QTableWidgetItem(str(action.get('wait', 0.1)))
+            self.table.setItem(row, 3, wait_item)
 
     def toggle_hotkey(self):
         if self.hotkey_toggle_btn.isChecked():
