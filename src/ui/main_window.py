@@ -57,30 +57,55 @@ class MainWindow(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
+        scale = 1.35
+        from PySide6.QtGui import QFont
+        font = self.font()
+        preferred_fonts = ["SF Pro Display", "San Francisco", "Segoe UI", "Arial"]
+        for fam in preferred_fonts:
+            font.setFamily(fam)
+            test_font = QFont(fam)
+            if test_font.family() == fam:
+                break
+        font.setPointSizeF(font.pointSizeF() * scale)
+        self.setFont(font)
+        self.resize(int(800 * scale), int(600 * scale))
+
         central = QWidget()
         layout = QVBoxLayout()
+        self._main_layout = layout
+        self._padding_percent = 0.03
 
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Type", "Value", "Wait (s)"])
+        self.table.setFont(font)
         layout.addWidget(self.table)
 
         add_row_btn = QPushButton("Add Action")
+        add_row_btn.setFont(font)
         add_row_btn.clicked.connect(self.add_action_row)
         layout.addWidget(add_row_btn)
+
+        duplicate_row_btn = QPushButton("Duplicate Action")
+        duplicate_row_btn.setFont(font)
+        duplicate_row_btn.clicked.connect(self.duplicate_action_row)
+        layout.addWidget(duplicate_row_btn)
 
         controls = QHBoxLayout()
         self.loop_spin = QSpinBox()
         self.loop_spin.setMinimum(1)
         self.loop_spin.setMaximum(999)
         self.loop_spin.setValue(1)
-        controls.addWidget(QLabel("Loops:"))
+        self.loop_spin.setFont(font)
+        controls.addWidget(QLabel("Loops:", font=font))
         controls.addWidget(self.loop_spin)
 
         self.start_btn = QPushButton("Start Macro")
+        self.start_btn.setFont(font)
         self.start_btn.clicked.connect(self.start_macro)
         controls.addWidget(self.start_btn)
 
         self.stop_btn = QPushButton("Stop Macro")
+        self.stop_btn.setFont(font)
         self.stop_btn.clicked.connect(self.stop_macro)
         self.stop_btn.setEnabled(False)
         controls.addWidget(self.stop_btn)
@@ -90,17 +115,21 @@ class MainWindow(QMainWindow):
         macro_controls = QHBoxLayout()
         self.macro_name_edit = QLineEdit()
         self.macro_name_edit.setPlaceholderText("Macro name")
+        self.macro_name_edit.setFont(font)
         macro_controls.addWidget(self.macro_name_edit)
 
         self.save_btn = QPushButton("Save Macro")
+        self.save_btn.setFont(font)
         self.save_btn.clicked.connect(self.save_macro)
         macro_controls.addWidget(self.save_btn)
 
         self.load_combo = QComboBox()
+        self.load_combo.setFont(font)
         self.refresh_macro_list()
         macro_controls.addWidget(self.load_combo)
 
         self.load_btn = QPushButton("Load Macro")
+        self.load_btn.setFont(font)
         self.load_btn.clicked.connect(self.load_macro)
         macro_controls.addWidget(self.load_btn)
 
@@ -108,18 +137,147 @@ class MainWindow(QMainWindow):
 
         hotkey_controls = QHBoxLayout()
         self.hotkey_edit = QLineEdit(self.hotkey)
-        hotkey_controls.addWidget(QLabel("Global Hotkey:"))
+        self.hotkey_edit.setFont(font)
+        hotkey_controls.addWidget(QLabel("Global Hotkey:", font=font))
         hotkey_controls.addWidget(self.hotkey_edit)
         self.hotkey_toggle_btn = QPushButton("Enable Hotkey")
+        self.hotkey_toggle_btn.setFont(font)
         self.hotkey_toggle_btn.setCheckable(True)
         self.hotkey_toggle_btn.clicked.connect(self.toggle_hotkey)
         hotkey_controls.addWidget(self.hotkey_toggle_btn)
         layout.addLayout(hotkey_controls)
 
         self.runtime_label = QLabel("Loop Runtime: 0.00s")
+        self.runtime_label.setFont(font)
         layout.addWidget(self.runtime_label)
 
         self.countdown_label = QLabel("")
+        self.countdown_label.setFont(font)
+        layout.addWidget(self.countdown_label)
+
+        central.setLayout(layout)
+        self.setCentralWidget(central)
+        self._container = central
+        self._update_padding()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_padding()
+
+    def _update_padding(self):
+        # Add 3% padding around the main layout
+        if hasattr(self, '_container') and hasattr(self, '_main_layout'):
+            w = self._container.width()
+            h = self._container.height()
+            pad_w = int(w * self._padding_percent)
+            pad_h = int(h * self._padding_percent)
+            self._main_layout.setContentsMargins(pad_w, pad_h, pad_w, pad_h)
+
+    def duplicate_action_row(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        type_widget = self.table.cellWidget(row, 0)
+        value_widget = self.table.cellWidget(row, 1)
+        wait_item = self.table.item(row, 2)
+        if not (type_widget and value_widget and wait_item):
+            return
+        type_ = type_widget.currentText()
+        value = value_widget.currentText() if value_widget.isEnabled() else ""
+        wait = wait_item.text() if wait_item else "0"
+        # Insert new row below
+        insert_row = row + 1
+        self.table.insertRow(insert_row)
+        new_type_combo = QComboBox()
+        new_type_combo.addItems(["key", "mouse", "wait"])
+        new_type_combo.setCurrentText(type_)
+        self.table.setCellWidget(insert_row, 0, new_type_combo)
+        key_options = [
+            "up", "down", "left", "right", "enter", "space", "tab", "esc", "backspace", "delete", "home", "end", "pageup", "pagedown"
+        ]
+        key_options += [chr(i) for i in range(97, 123)]  # a-z
+        key_options += [str(i) for i in range(0, 10)]   # 0-9
+        mouse_options = ["left", "right", "middle"]
+        new_value_combo = QComboBox()
+        new_value_combo.setEditable(False)
+        if type_ == "key":
+            new_value_combo.addItems(key_options)
+            new_value_combo.setCurrentText(value)
+            new_value_combo.setEnabled(True)
+        elif type_ == "mouse":
+            new_value_combo.addItems(mouse_options)
+            new_value_combo.setCurrentText(value)
+            new_value_combo.setEnabled(True)
+        else:
+            new_value_combo.setEnabled(False)
+        self.table.setCellWidget(insert_row, 1, new_value_combo)
+        new_wait_item = QTableWidgetItem(str(wait))
+        self.table.setItem(insert_row, 2, new_wait_item)
+        self.table.setCurrentCell(insert_row, 0)
+
+        controls = QHBoxLayout()
+        self.loop_spin = QSpinBox()
+        self.loop_spin.setMinimum(1)
+        self.loop_spin.setMaximum(999)
+        self.loop_spin.setValue(1)
+        self.loop_spin.setFont(font)
+        controls.addWidget(QLabel("Loops:", font=font))
+        controls.addWidget(self.loop_spin)
+
+        self.start_btn = QPushButton("Start Macro")
+        self.start_btn.setFont(font)
+        self.start_btn.clicked.connect(self.start_macro)
+        controls.addWidget(self.start_btn)
+
+        self.stop_btn = QPushButton("Stop Macro")
+        self.stop_btn.setFont(font)
+        self.stop_btn.clicked.connect(self.stop_macro)
+        self.stop_btn.setEnabled(False)
+        controls.addWidget(self.stop_btn)
+
+        layout.addLayout(controls)
+
+        macro_controls = QHBoxLayout()
+        self.macro_name_edit = QLineEdit()
+        self.macro_name_edit.setPlaceholderText("Macro name")
+        self.macro_name_edit.setFont(font)
+        macro_controls.addWidget(self.macro_name_edit)
+
+        self.save_btn = QPushButton("Save Macro")
+        self.save_btn.setFont(font)
+        self.save_btn.clicked.connect(self.save_macro)
+        macro_controls.addWidget(self.save_btn)
+
+        self.load_combo = QComboBox()
+        self.load_combo.setFont(font)
+        self.refresh_macro_list()
+        macro_controls.addWidget(self.load_combo)
+
+        self.load_btn = QPushButton("Load Macro")
+        self.load_btn.setFont(font)
+        self.load_btn.clicked.connect(self.load_macro)
+        macro_controls.addWidget(self.load_btn)
+
+        layout.addLayout(macro_controls)
+
+        hotkey_controls = QHBoxLayout()
+        self.hotkey_edit = QLineEdit(self.hotkey)
+        self.hotkey_edit.setFont(font)
+        hotkey_controls.addWidget(QLabel("Global Hotkey:", font=font))
+        hotkey_controls.addWidget(self.hotkey_edit)
+        self.hotkey_toggle_btn = QPushButton("Enable Hotkey")
+        self.hotkey_toggle_btn.setFont(font)
+        self.hotkey_toggle_btn.setCheckable(True)
+        self.hotkey_toggle_btn.clicked.connect(self.toggle_hotkey)
+        hotkey_controls.addWidget(self.hotkey_toggle_btn)
+        layout.addLayout(hotkey_controls)
+
+        self.runtime_label = QLabel("Loop Runtime: 0.00s")
+        self.runtime_label.setFont(font)
+        layout.addWidget(self.runtime_label)
+
+        self.countdown_label = QLabel("")
+        self.countdown_label.setFont(font)
         layout.addWidget(self.countdown_label)
 
         central.setLayout(layout)

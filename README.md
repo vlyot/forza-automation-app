@@ -1,76 +1,52 @@
 
 ---
+---
 
+## kbm macro automation app
 
+i made this app so i could run forza glitches while i was out (like at school or whatever)
 
-## KB/M Macro Automation App
+this is just a desktop gui to build and loop keyboard/mouse macros (press, wait, press, etc) for forza glitches. basically, it just goes to the race you pick and starts + finishes it for you on repeat.
 
-Desktop GUI to build and loop keyboard/mouse macros (press → wait → press…) for automating forza glitches. The goal is to navigate to the selected race and start + complete the race for you automatically in a loop.
+it sends keyboard and mouse inputs you set up in the ui, using python libs (`pyautogui`, `keyboard`).
 
-It sends keyboard and mouse inputs you define in the UI, using Python libraries (`pyautogui`, `keyboard`).
-
-
-it used to be for controllers, but with the discontinuation of ViGemBus emulators i couldn't seem to find a working alternative. If you somehow are able to edit this code to make it work for controllers, be my guest.
-
-> ⚠️ Use responsibly. Automation may violate a game’s ToS. Stick to single-player/offline or where macros are allowed. I am not responsible for any damage caused. By using this application you agree to the terms and responsibility is fully on you.
+it used to work for controllers, but since vigembus emulators were discontinued, i couldn't find anything that worked.
 
 ---
 
-## Quick Start
+## quick start
 
-### 1. Install dependencies
+### 1. install dependencies
 
-Open a terminal in the project folder and run:
+open a terminal in the project folder and run:
 
 ```powershell
 pip install pyautogui keyboard
 ```
 
-### 2. Run the app
+### 2. run the app
 
 ```powershell
 python src/app.py
 ```
 
-The GUI will appear. Keep your target app or game focused to receive inputs.
+the gui will pop up. make sure your game or app is focused to get the inputs. i set a 3 second timer so you can alt-tab back to your game or app before the macro starts.
 
-### 3. Build and run macros
+### 3. build and run macros
 
-- Add actions (keyboard or mouse) in the table
-- Save/load macros (limit 5, name them)
-- Set loop count and start/stop
-- (Optional) Enable global hotkey for start/stop
-- Loop runtime is shown in the UI
+- add actions (keyboard or mouse) in the table
+- save/load macros (limit 5, name them)
+- set loop count and start/stop
+- (optional) enable global hotkey for start/stop
+- loop runtime shows up in the ui
 
----
-
-## Features
-
-* Visual **sequence builder**: choose keyboard key (including arrows, Enter, etc.) or mouse button, set press duration (ms), wait (ms)
-* **Run once** or **loop** until stopped
-* **Reorder** and **delete** steps
-* Uses `pyautogui` and `keyboard` to send real keyboard/mouse input to Windows
 
 ---
 
 
-## Quick Start (Develop & Test Without Packaging)
- **Run the app (no packaging)**
+## button mapping (dualsense → xinput) (discontinued, just for reference)
 
- 1. Open the project in vsc and open terminal under \forza-automation-app
-
-  ```powershell
-  python src/app.py
-  ```
-
-  The GUI should appear. Keep your target app or game focused to receive inputs.
-
-
---
-
-## Button Mapping (DualSense → XInput) (discontinued but here for any reference)
-
-Forza listens to **XInput**. The GUI shows “PS5/DualSense” names; the app sends the equivalent **Xbox 360** inputs.
+forza listens to **xinput**. the gui shows "ps5/dualsense" names, but the app sends the matching **xbox 360** buttons.
 
 | PS5 (DualSense)     | XInput (Xbox 360)         | `vgamepad` constant / method              |
 | ------------------- | ------------------------- | ----------------------------------------- |
@@ -92,81 +68,66 @@ Forza listens to **XInput**. The GUI shows “PS5/DualSense” names; the app se
 | Create              | **Back**                  | `XUSB_BUTTON.XUSB_GAMEPAD_BACK`           |
 | PS / Touchpad click | (Not in XInput)           | *(not mapped)*                            |
 
-> Sticks can be added later via `left_joystick(x, y)` / `right_joystick(x, y)` (range −32768..32767).
+
+> sticks could be added later with `left_joystick(x, y)` / `right_joystick(x, y)` (range −32768..32767).
 
 ---
 
 
-## How to Use
 
-1. Launch the app.
-2. In **Build your sequence**:
-  * Choose **Action Type**: `key` (keyboard) or `mouse` (mouse button)
-  * Select a **Key** (e.g., `enter`, `up`, `right`, `space`, etc.) or **Mouse Button** (`left`, `right`, `middle`)
-  * Set **Press (ms)** (how long to hold the key/button)
-  * Set **Wait (ms)** (delay after that step completes)
-  * Click **Add Step**. Repeat to build multiple steps.
-3. Reorder with **Move Up/Down**, remove with **Delete**.
-4. Choose **Run Once** or **Loop**.
-5. Click **Start**. Click **Stop** to end looping.
+## how to use
 
-Example (simple navigation):
+1. launch the app
+2. in **build your sequence**:
+   * pick **action type**: `key` (keyboard) or `mouse` (mouse button)
+   * pick a **key** (like `enter`, `up`, `right`, `space`, etc.) or **mouse button** (`left`, `right`, `middle`)
+   * set **press (ms)** (how long to hold it)
+   * set **wait (ms)** (delay after that step)
+   * click **add step**. repeat to build your macro
+3. reorder with **move up/down**, remove with **delete**
+4. pick **run once** or **loop**
+5. click **start**. click **stop** to end looping
 
-* `right — Press 100ms — Wait 300ms`
-* `enter — Press 100ms — Wait 500ms`
+example:
 
----
-
-## Development Notes
-
-* The input loop runs in a background **thread** to keep the GUI responsive.
-* Each step performs:
-
-  1. Press/hold (or trigger analog set) for *Press (ms)*.
-  2. Release (or reset trigger to 0).
-  3. Sleep for *Wait (ms)*.
-
----
-
-## Troubleshooting
-
-* **Forza doesn’t react**
-
-  * Make sure the **game window is focused**.
-  * Close overlays that might filter input (recorders, anti-cheat in online modes, etc.).
-
-* **“Unknown button …” errors**
-
-  * Only use the buttons listed in the **Button Mapping** table.
-  * In this case, stick to tenkeyless + arrow keys
-  
-
+- `right — press 100ms — wait 300ms`
+- `enter — press 100ms — wait 500ms`
 
 ---
 
 
-## Dependencies
+## dev notes
 
-* `pyautogui` — Python library for mouse automation
-* `keyboard` — Python library for keyboard automation
-* `pyinstaller` — (optional) build a single-file Windows executable
+- the input loop runs in a background **thread** so the gui doesn't freeze
+- each step does:
+  1. press/hold (or trigger analog set) for *press (ms)*
+  2. release (or reset trigger to 0)
+  3. sleep for *wait (ms)*
 
-Install with:
-
-```powershell
-pip install pyautogui keyboard
-# optional
-pip install pyinstaller
-```
+i will not be fixing the indentation errors
 
 ---
 
 
-## Legal & Ethics
+## dependencies
 
-* Automation may violate game or app ToS—use responsibly and only where allowed.
-* This tool is for accessibility, testing, and single-player convenience.
-* I do not take any responsibility for any damage caused whatsoever.
+- `pyautogui` — python lib for mouse automation
+- `keyboard` — python lib for keyboard automation
+- `pyinstaller` — (optional) build a single-file windows exe
+
+---
+
+
+## note
+
+- automation might break a game or app's tos—use it responsibly and only where allowed
+- this tool is for accessibility, testing, and single-player convenience
+- i take no responsibility for anything that happens
 
 
 ---
+
+
+should not have used python for this
+
+
