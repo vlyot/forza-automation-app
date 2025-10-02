@@ -1,13 +1,13 @@
 
 ## kbm macro automation app
 
-i made this app so i could run forza glitches while i was out (like at school or whatever)
+i made this app so i could run forza glitches while i was out (like at school)
 
-this is just a desktop gui to build and loop keyboard/mouse macros (press, wait, press, etc) for forza glitches. basically, it just goes to the race you pick and starts + finishes it for you on repeat.
+this is just a desktop gui to build and loop keyboard/mouse macros (press, wait, press, etc) for forza glitches. it just goes to the race you pick and starts + finishes it for you on repeat.
 
 it sends keyboard and mouse inputs you set up in the ui, using python libs (`pyautogui`, `keyboard`).
 
-it used to work for controllers, but since vigembus emulators were discontinued, i couldn't find anything that worked.
+it used to work for controllers, but vigembus emulators were discontinued
 
 ---
 
