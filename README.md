@@ -1,6 +1,7 @@
 
 ## cmacro
-customised macro with the ability to add custom sequences
+
+### customised macro with the ability to add custom sequences
 ---
 
 ## quick start
@@ -18,9 +19,6 @@ pip install pyautogui keyboard
 ```powershell
 python src/app.py
 ```
-
-the gui will pop up. make sure your game or app is focused to get the inputs. i set a 3 second timer so you can alt-tab back to your game or app before the macro starts.
-
 ### 3. build and run macros
 
 - add actions (keyboard or mouse) in the table
@@ -60,43 +58,8 @@ forza listens to **xinput**. the gui shows "ps5/dualsense" names, but the app se
 
 > sticks could be added later with `left_joystick(x, y)` / `right_joystick(x, y)` (range −32768..32767).
 
----
-
-
-
-## how to use
-
-1. launch the app
-2. in **build your sequence**:
-   * pick **action type**: `key` (keyboard) or `mouse` (mouse button)
-   * pick a **key** (like `enter`, `up`, `right`, `space`, etc.) or **mouse button** (`left`, `right`, `middle`)
-   * set **press (ms)** (how long to hold it)
-   * set **wait (ms)** (delay after that step)
-   * click **add step**. repeat to build your macro
-3. reorder with **move up/down**, remove with **delete**
-4. pick **run once** or **loop**
-5. click **start**. click **stop** to end looping
-
-example:
-
-- `right — press 100ms — wait 300ms`
-- `enter — press 100ms — wait 500ms`
 
 ---
-
-
-## dev notes
-
-- the input loop runs in a background **thread** so the gui doesn't freeze
-- each step does:
-  1. press/hold (or trigger analog set) for *press (ms)*
-  2. release (or reset trigger to 0)
-  3. sleep for *wait (ms)*
-
-i will not be fixing the indentation errors
-
----
-
 
 ## dependencies
 
